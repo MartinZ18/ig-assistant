@@ -1,0 +1,43 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.18.7
+    # Import the workflow and activate it on every start, then run n8n.
+    # The workflow carries a fixed id, so re-importing overwrites it instead of duplicating it.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        n8n import:workflow --input=/workflows/assistant.json &&
+        n8n publish:workflow --id=igAssistant0001 &&
+        exec n8n start
+    environment:
+      GENERIC_TIMEZONE: America/Argentina/Mendoza
+      TZ: America/Argentina/Mendoza
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      # The workflow reads its configuration through $env.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Execution logs would otherwise keep customer message text.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_ON_ERROR: none
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      ASSISTANT_SECRET: ${ASSISTANT_SECRET:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-3000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-https://api.telegram.org}
+      LEADS_URL: ${LEADS_URL:-}
+      LEADS_SECRET: ${LEADS_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+
+volumes:
+  n8n_data:
