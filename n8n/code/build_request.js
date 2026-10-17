@@ -31,16 +31,19 @@ for (const zone of CATALOG.shipping.zones) if (zone.cost_ars > 0) allowed.add(zo
 allowed.add(CATALOG.shipping.free_shipping_over_ars);
 
 const input = $input.first().json.input;
+// gpt-oss models accept reasoning_effort; 'low' cuts completion tokens, which matter on free-tier token limits.
+const reasoningEffort = $env.LLM_REASONING_EFFORT;
 return [
   {
     json: {
       input,
       allowedPrices: [...allowed],
       llmBody: {
-        model: $env.LLM_MODEL || 'llama-3.3-70b-versatile',
+        model: $env.LLM_MODEL || 'openai/gpt-oss-120b',
         temperature: 0.2,
         max_tokens: 400,
         response_format: { type: 'json_object' },
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: input.message },

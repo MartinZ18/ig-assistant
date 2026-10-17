@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import uuid
 from datetime import date
 from pathlib import Path
@@ -162,6 +163,8 @@ def cell(value):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:5678")
+    # Free-tier Groq allows a few thousand tokens per minute; pause so the eval measures the bot, not the quota.
+    parser.add_argument("--pause", type=float, default=20.0, help="seconds between cases")
     args = parser.parse_args()
 
     env = load_env()
@@ -174,12 +177,14 @@ def main():
     secret = env.get("ASSISTANT_SECRET", "")
     if not secret:
         sys.exit("live_eval: ASSISTANT_SECRET is missing (set it in .env, same value n8n runs with).")
-    model = env.get("LLM_MODEL", "llama-3.3-70b-versatile")
+    model = env.get("LLM_MODEL", "openai/gpt-oss-120b")
     base_url = args.base_url.rstrip("/")
 
     run_id = uuid.uuid4().hex[:8]
     results = []
     for i, (name, message, check) in enumerate(CASES):
+        if i:
+            time.sleep(args.pause)
         try:
             answer = call(base_url, secret, message, f"live-eval-{run_id}-{i}")
         except requests.RequestException as exc:
