@@ -11,4 +11,10 @@ the store catalog), applies deterministic guards and returns `{reply, intent, ha
 
 Webhook: `POST http://localhost:5678/webhook/assistant` with header `X-Assistant-Secret`.
 
-Full documentation (architecture, ManyChat setup, tests) is added in later tasks.
+## Docs
+
+- [docs/manychat-setup.md](docs/manychat-setup.md): connect Instagram, comment automation, External Request, manual curl tests.
+- [apps-script/README.md](apps-script/README.md): leads sheet web app (deploy, secret, redirect note).
+- `eval/live_eval.py`: live cases against the real LLM (needs your own `GROQ_API_KEY`); writes `reports/live-eval.md`.
+
+Full documentation (architecture, tests) is added in a later task.
