@@ -16,6 +16,8 @@ var HEADERS = [
 var COL = {};
 HEADERS.forEach(function (name, i) { COL[name] = i + 1; });
 var MAX_TEXT = 2000;
+// Rows read per getValues call when scanning back for today's leads.
+var SCAN_CHUNK = 200;
 
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
@@ -85,23 +87,27 @@ function doPost(e) {
   }
   try {
     var sheet = getSheet();
-    var lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      var rows = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-      // Newest rows are at the bottom: scan from the end and stop at an older day.
+    // Newest rows are at the bottom: scan back in chunks and stop at an older day, so the cost
+    // depends on today's leads instead of the whole sheet.
+    var end = sheet.getLastRow();
+    var olderDay = false;
+    while (end > 1 && !olderDay) {
+      var start = Math.max(2, end - SCAN_CHUNK + 1);
+      var rows = sheet.getRange(start, 1, end - start + 1, HEADERS.length).getValues();
       for (var i = rows.length - 1; i >= 0; i--) {
         var created = rows[i][COL.created_at - 1];
         var day = created instanceof Date
           ? Utilities.formatDate(created, TIME_ZONE, 'yyyy-MM-dd')
           : String(created).slice(0, 10);
-        if (day < today) break;
+        if (day < today) { olderDay = true; break; }
         if (day === today && String(rows[i][COL.contact_id - 1]) === contactId) {
-          var row = i + 2;
+          var row = start + i;
           sheet.getRange(row, COL.last_message).setValue(safeCell(text(data.message)));
           sheet.getRange(row, COL.updated_at).setValue(now);
           return jsonResponse({ ok: true, action: 'updated' });
         }
       }
+      end = start - 1;
     }
     var message = safeCell(text(data.message));
     sheet.appendRow([
