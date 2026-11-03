@@ -58,7 +58,9 @@ Response 200:
   timeout (`LLM_TIMEOUT_MS`, default 3000). Timeout, 5xx, non-JSON or an invalid `intent` all end in a canned reply with `handoff: true`.
 - **No user text in the system prompt.** The system prompt holds only the catalog and rules; the customer message is a separate
   `user` message. The LLM has no tools: n8n, not the model, decides side effects from `intent`.
-- **Rate limit.** More than 5 messages from one `contact_id` in 60 s get a canned reply and the LLM is not called.
+- **Rate limit.** More than 5 messages from one `contact_id` in 60 s get a canned reply and the LLM is not called. A second, account-wide cap
+  (60 per 60 s by default, keyed by the optional `account_id` field, `default` when omitted) bounds total LLM spend even if `contact_id` is rotated.
+  Tune with `RATE_LIMIT_PER_CONTACT`, `RATE_LIMIT_PER_ACCOUNT` and `RATE_LIMIT_WINDOW_SECONDS` in `.env`. n8n is published on `127.0.0.1:5678` only.
 - **Lead dedup.** One lead row per contact per day. n8n claims the contact before posting and releases the claim if the post fails;
   Apps Script also upserts by `contact_id` and day.
 

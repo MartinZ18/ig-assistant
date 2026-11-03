@@ -170,6 +170,46 @@ def test_sixth_message_in_a_minute_gets_rate_limit_reply_without_calling_llm(ass
     assert len(fake.llm_calls) == 6
 
 
+def test_rotating_contact_ids_hit_the_account_cap_but_other_accounts_are_unaffected(assistant, fake, contact):
+    # RATE_LIMIT_PER_ACCOUNT is 12 in the test stack. Every message comes from a fresh contact_id,
+    # so the per-contact limit never fires: only the account-wide cap can stop the spend.
+    fake.llm_returns_json("Hola, ¿en qué te ayudo?", "faq")
+    account = f"page-{contact}"
+    for i in range(12):
+        reply = assistant.call("hola", contact_id=f"{contact}-{i}", account_id=account)
+        assert reply.json()["reply"] == "Hola, ¿en qué te ayudo?"
+    assert len(fake.llm_calls) == 12
+
+    blocked = assistant.call("hola", contact_id=f"{contact}-new", account_id=account)
+    assert blocked.status_code == 200
+    assert blocked.json()["reply"] != "Hola, ¿en qué te ayudo?"
+    assert blocked.json()["handoff"] is False
+    assert len(fake.llm_calls) == 12  # the cap stopped the LLM call
+
+    other = assistant.call("hola", contact_id=f"{contact}-new", account_id=account + "-b")
+    assert other.json()["reply"] == "Hola, ¿en qué te ayudo?"
+    assert len(fake.llm_calls) == 13
+
+    # per-contact limit still applies inside an account that has room
+    solo = f"{contact}-solo"
+    for _ in range(5):
+        assert assistant.call("hola", contact_id=solo, account_id=account + "-c").json()["reply"] == "Hola, ¿en qué te ayudo?"
+    assert assistant.call("hola", contact_id=solo, account_id=account + "-c").json()["reply"] != "Hola, ¿en qué te ayudo?"
+    assert len(fake.llm_calls) == 18
+
+
+def test_rejected_messages_do_not_consume_account_budget(assistant, fake, contact):
+    # A contact already over its own limit must not burn the shared account budget.
+    fake.llm_returns_json("Hola, ¿en qué te ayudo?", "faq")
+    account = f"page-{contact}"
+    for _ in range(5):
+        assistant.call("hola", contact_id=contact, account_id=account)
+    for _ in range(20):
+        assistant.call("hola", contact_id=contact, account_id=account)  # all rate limited
+    fresh = assistant.call("hola", contact_id=contact + "-fresh", account_id=account)
+    assert fresh.json()["reply"] == "Hola, ¿en qué te ayudo?"
+
+
 # --- prompt safety ------------------------------------------------------------
 
 

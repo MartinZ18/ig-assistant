@@ -17,7 +17,7 @@ from tests.fake_services import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-N8N_URL = "http://localhost:5678"
+N8N_URL = "http://127.0.0.1:5678"
 ASSISTANT_SECRET = "assistant-test-secret"
 PROJECT = "ig-assistant-e2e"
 
@@ -52,6 +52,7 @@ def n8n(fake):
         "TELEGRAM_API_BASE": base,
         "LEADS_URL": f"{base}/leads",
         "LEADS_SECRET": LEADS_SECRET,
+        "RATE_LIMIT_PER_ACCOUNT": "12",
     }
     _compose("down", "-v", "--remove-orphans", env=env, check=False)
     _compose("up", "-d", env=env)
@@ -90,6 +91,9 @@ class Assistant:
             "contact_id": contact_id or f"c-{uuid.uuid4().hex[:10]}",
             "username": username,
             "message": message,
+            # Fresh account per call unless a test pins one, so the shared account cap
+            # (12 in this stack) is not consumed across unrelated tests.
+            "account_id": f"acct-{uuid.uuid4().hex[:10]}",
             **extra,
         }
         return requests.post(f"{N8N_URL}/webhook/assistant", json=payload, headers=headers, timeout=20)

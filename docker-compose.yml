@@ -33,10 +33,13 @@ services:
       TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-https://api.telegram.org}
       LEADS_URL: ${LEADS_URL:-}
       LEADS_SECRET: ${LEADS_SECRET:-}
+      RATE_LIMIT_PER_CONTACT: ${RATE_LIMIT_PER_CONTACT:-5}
+      RATE_LIMIT_PER_ACCOUNT: ${RATE_LIMIT_PER_ACCOUNT:-60}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro

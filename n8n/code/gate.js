@@ -1,9 +1,15 @@
-// Gate: shared-secret check, input validation and per-contact rate limit.
+// Gate: shared-secret check, input validation, per-contact and per-account rate limits.
+// The per-account limit caps total LLM spend even if contact_id is rotated.
 // Emits one item: { gate: 'ok' | 'unauthorized' | 'invalid' | 'rate_limited', status, body, input }.
 // Rate-limit state lives in workflow static data, which n8n only persists for production
 // (active, webhook-triggered) executions, not for manual test runs.
-const LIMIT = 5;
-const WINDOW_MS = 60 * 1000;
+function envInt(name, fallback) {
+  const n = Number.parseInt($env[name], 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+const LIMIT = envInt('RATE_LIMIT_PER_CONTACT', 5);
+const ACCOUNT_LIMIT = envInt('RATE_LIMIT_PER_ACCOUNT', 60);
+const WINDOW_MS = envInt('RATE_LIMIT_WINDOW_SECONDS', 60) * 1000;
 const RATE_LIMIT_REPLY =
   'Recibimos varios mensajes seguidos. Por favor, espera un momento y vuelve a escribirnos.';
 
@@ -34,19 +40,29 @@ const input = {
   username: text(payload.username, 100),
   message: text(payload.message, 1000),
 };
+// Instagram account/page the message arrived on. Single-account setups may omit it.
+const accountId = text(payload.account_id, 128) || 'default';
 if (!input.channel || !input.contact_id || !input.message) {
   return reject('invalid', 400, { error: 'invalid_request' });
 }
 
 const state = $getWorkflowStaticData('global');
 state.rate = state.rate || {};
+state.accountRate = state.accountRate || {};
 const now = Date.now();
-for (const id of Object.keys(state.rate)) {
-  state.rate[id] = state.rate[id].filter((t) => now - t < WINDOW_MS);
-  if (state.rate[id].length === 0) delete state.rate[id];
+function prune(map) {
+  for (const id of Object.keys(map)) {
+    map[id] = map[id].filter((t) => now - t < WINDOW_MS);
+    if (map[id].length === 0) delete map[id];
+  }
 }
+prune(state.rate);
+prune(state.accountRate);
+
 const recent = state.rate[input.contact_id] || [];
-if (recent.length >= LIMIT) {
+const accountRecent = state.accountRate[accountId] || [];
+// A blocked message consumes neither budget, so a flooding contact cannot drain the account.
+if (recent.length >= LIMIT || accountRecent.length >= ACCOUNT_LIMIT) {
   return [
     {
       json: {
@@ -59,5 +75,7 @@ if (recent.length >= LIMIT) {
 }
 recent.push(now);
 state.rate[input.contact_id] = recent;
+accountRecent.push(now);
+state.accountRate[accountId] = accountRecent;
 
 return [{ json: { gate: 'ok', input } }];
