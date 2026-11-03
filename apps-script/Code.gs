@@ -45,6 +45,17 @@ function getSheet() {
   return sheet;
 }
 
+// Constant-time comparison: the length check is folded into the result and the loop always
+// walks the full length, so timing does not reveal how much of the secret matched.
+function sameSecret(given, expected) {
+  if (typeof given !== 'string' || typeof expected !== 'string' || expected === '') return false;
+  var diff = given.length ^ expected.length;
+  for (var i = 0; i < expected.length; i++) {
+    diff |= (given.charCodeAt(i) || 0) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 function validate(data) {
   if (!data || typeof data !== 'object') return 'body must be a JSON object';
   var required = ['contact_id', 'channel', 'message'];
@@ -68,7 +79,7 @@ function doPost(e) {
   }
 
   var expected = PropertiesService.getScriptProperties().getProperty('LEADS_SECRET');
-  if (!expected || !data || data.secret !== expected) {
+  if (!expected || !data || !sameSecret(data.secret, expected)) {
     return jsonResponse({ ok: false, error: 'unauthorized' });
   }
 
