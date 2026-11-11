@@ -84,7 +84,7 @@ def _reset_fake(fake, n8n):
 class Assistant:
     """What ManyChat does: POST the contract with the shared secret."""
 
-    def call(self, message="hola", *, contact_id=None, secret=ASSISTANT_SECRET, username="ana", **extra):
+    def call(self, message="hola", *, contact_id=None, secret=ASSISTANT_SECRET, username="ana", timeout=20, **extra):
         headers = {"X-Assistant-Secret": secret} if secret is not None else {}
         payload = {
             "channel": "instagram",
@@ -96,7 +96,7 @@ class Assistant:
             "account_id": f"acct-{uuid.uuid4().hex[:10]}",
             **extra,
         }
-        return requests.post(f"{N8N_URL}/webhook/assistant", json=payload, headers=headers, timeout=20)
+        return requests.post(f"{N8N_URL}/webhook/assistant", json=payload, headers=headers, timeout=timeout)
 
 
 @pytest.fixture

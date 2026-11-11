@@ -51,7 +51,7 @@ The Default Reply runs when no other automation matches a DM.
 
 Constraints to keep in mind:
 
-- The External Request has a short timeout. This workflow caps the LLM call (`LLM_TIMEOUT_MS`, 3000 by default) and always answers with a canned reply on failure, so ManyChat gets a response. Check the current limit in the help center rather than assuming a number.
+- The External Request has a short timeout. This workflow caps the LLM call (`LLM_TIMEOUT_MS`, 3000 by default) and always answers with a canned reply on failure, so ManyChat gets a response. Check the current limit in the help center rather than assuming a number. n8n runs one execution at a time (`N8N_CONCURRENCY_PRODUCTION_LIMIT=1`, needed for exact rate limits), so during a burst queued messages can wait longer than that timeout; see the rate-limit note in the README.
 - The plan, pricing and Instagram messaging window rules are set by ManyChat and Meta; check the pricing page and help center for current values.
 
 Response contract, for reference: `{"reply": "...", "intent": "faq|lead|human|other", "handoff": true|false}`.

@@ -51,9 +51,16 @@ Response 200:
 
 ## Guards and why
 
-- **Price guard.** The model must not quote prices that are not in the catalog. Any price in a reply
-  (`$N`, `N pesos/ARS`, numbers with thousands separators or 4+ digits) is checked against the catalog;
-  a mismatch replaces the reply with a canned handoff message. Days and opening hours do not trigger it.
+- **Price and commercial-terms guard.** The model must not promise prices or terms the catalog does not back.
+  Every price in a reply (`$N`, `N pesos/ARS`, `N mil`/`k`/`lucas`, numbers with thousands separators or 4+ digits,
+  after Unicode NFKC normalization) must belong to what its clause talks about: the named product, or the shipping zone
+  for a shipping cost when the clause names no product ("Por correo la campera sale $6.800" is about the campera). A
+  generic word naming several products ("remera", "abrigo") only carries two or more different prices (a range or a list). Only a reply that
+  names nothing at all ("Sale $33.400.") is checked against the product the customer asked about. The free-shipping
+  threshold passes only in a free-shipping sentence ("envío gratis en compras superiores a $80.000"). Percentages
+  (except "100% algodón"-style materials), NxM promos, foreign currency, amounts spelled out in words, prices next to
+  discount words and more installments than the catalog's "hasta N cuotas" always fail. A failure replaces the reply
+  with the canned handoff message and alerts the owner. Days, opening hours, "3 cuotas" and "mil gracias" do not trigger it.
 - **Fallback in under 5 s.** ManyChat external requests time out after a few seconds. The LLM call has its own
   timeout (`LLM_TIMEOUT_MS`, default 3000). Timeout, 5xx, non-JSON or an invalid `intent` all end in a canned reply with `handoff: true`.
 - **No user text in the system prompt.** The system prompt holds only the catalog and rules; the customer message is a separate
@@ -61,6 +68,12 @@ Response 200:
 - **Rate limit.** More than 5 messages from one `contact_id` in 60 s get a canned reply and the LLM is not called. A second, account-wide cap
   (60 per 60 s by default, keyed by the optional `account_id` field, `default` when omitted) bounds total LLM spend even if `contact_id` is rotated.
   Tune with `RATE_LIMIT_PER_CONTACT`, `RATE_LIMIT_PER_ACCOUNT` and `RATE_LIMIT_WINDOW_SECONDS` in `.env`. n8n is published on `127.0.0.1:5678` only.
+  The counters live in workflow static data, which n8n saves when an execution ends, so `docker-compose.yml` sets
+  `N8N_CONCURRENCY_PRODUCTION_LIMIT=1`: executions run one at a time and the limits hold under a simultaneous burst.
+  The cost is throughput: messages queue behind the one in progress (LLM call up to `LLM_TIMEOUT_MS`, plus the
+  side effects), roughly 20–60 messages per minute with a normal LLM latency. Under a burst while the LLM hangs, the
+  last queued message waits about (calls that reach the LLM) × 3 s, which can exceed ManyChat's request timeout.
+  Do not raise the limit; if you need more throughput, move the counters to an atomic store (Redis `INCR`) first.
 - **Lead dedup.** One lead row per contact per day. n8n claims the contact before posting and releases the claim if the post fails;
   Apps Script also upserts by `contact_id` and day.
 
@@ -84,8 +97,10 @@ and `LEADS_URL` are configurable so they can point at fakes.
     python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt   # Windows; use .venv/bin on Linux/macOS
     .venv/Scripts/python -m pytest
 
-The 18 tests are end-to-end: they start the real n8n container with docker compose and replace the LLM, Telegram and the
-leads sink with one fake HTTP server. A full run rewrites [reports/e2e-report.md](reports/e2e-report.md) (date, commit,
+The tests in `tests/` are end-to-end: they start the real n8n container with docker compose and replace the LLM, Telegram and the
+leads sink with one fake HTTP server. `tests/security/` adds attack tests (the guard tests run the real Code-node source with
+Node, no Docker; the race tests hit the real container). Attack tests for findings not fixed yet are marked `open_finding`
+and only run on request: `.venv/Scripts/python -m pytest -o addopts="" -p no:cacheprovider -m open_finding tests/security`. A full run rewrites [reports/e2e-report.md](reports/e2e-report.md) (date, commit,
 n8n image, one row per failure mode, result, duration). Runs that select a subset do not overwrite it.
 
 ## Editing the catalog
@@ -107,9 +122,20 @@ not in the repo until then), the Apps Script deployment, and every ManyChat step
 
 ## Limitations
 
-- Rate limit and lead dedup state live in n8n workflow static data. Concurrent executions for the same contact can lose updates
-  (last write wins). Apps Script's upsert under a lock covers the leads case; the rate limit can be exceeded under a burst.
-- The price guard does not catch prices spelled out in words ("doce mil").
+- Rate limit and lead dedup state live in n8n workflow static data; they are exact only because production executions are
+  serialized (`N8N_CONCURRENCY_PRODUCTION_LIMIT=1`, single n8n instance, no queue mode). Running several n8n workers would
+  bring the lost-update race back.
+- The price guard reduces off-catalog promises; it does not rule them out. It reads free Spanish text with deterministic rules
+  (the price belongs to the nearest product in its clause; a generic word like "remera" or "abrigo" carries only a range or a
+  list of prices, never a single one), and an independent review found phrasings that still pass. They are kept as
+  `open_finding` tests in `tests/security/guards/test_price_guard_legit_answers.py`: a real price of one product right after
+  another in the same clause ("la campera y la gorra salen $7.600", or inside a parenthesis); small bare numbers ("te la
+  dejo en 45"); "gratis" or "mitad de precio" with no amount; the free-shipping threshold quoted as a product price in a
+  free-shipping sentence; the generic word "envío" with another zone's cost; installments written as "hasta 12" or
+  "12 veces"; "7 600"; amounts in words without a unit; "dos por uno"; and "dollars". The guard also hands off some correct
+  answers: a shipping cost in a sentence that names a product ("El envío de la campera por correo cuesta $6.800"), since
+  wording alone cannot tell whose price it is, and a single "desde" price on a generic word. Totals of several products are always
+  handed off. A sturdier design (the model picks catalog items by id and the code writes every price) is the planned fix.
 - Instagram only allows replying within 24 hours of the customer's last message. The bot can answer, not send proactive follow-ups.
   Proactive follow-ups are what the future WhatsApp adapter would add.
 

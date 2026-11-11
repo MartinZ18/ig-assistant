@@ -51,7 +51,8 @@ SHIPPING_NUMBERS = {z["cost_ars"] for z in catalog["shipping"]["zones"]} | {
 }
 ALL_ALLOWED = PRODUCT_PRICES | SHIPPING_NUMBERS
 
-# Same notion of "price-like number" as the workflow guard (n8n/code/parse_guard.js).
+# Simplified "price-like number" (the workflow guard in n8n/code/parse_guard.js also checks which
+# product each price belongs to, words, currencies, percentages and installments).
 PRICE_RE = re.compile(
     r"\$\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:pesos|ars)\b|\b(\d{1,3}(?:[.,]\d{3})+|\d{4,})\b", re.I
 )

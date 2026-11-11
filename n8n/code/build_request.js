@@ -24,12 +24,6 @@ const SYSTEM_PROMPT = [
   JSON.stringify(CATALOG),
 ].join('\n');
 
-// Every number the bot may quote as a price: product prices, shipping costs, free-shipping threshold.
-const allowed = new Set();
-for (const product of CATALOG.products) allowed.add(product.price_ars);
-for (const zone of CATALOG.shipping.zones) if (zone.cost_ars > 0) allowed.add(zone.cost_ars);
-allowed.add(CATALOG.shipping.free_shipping_over_ars);
-
 const input = $input.first().json.input;
 // gpt-oss models accept reasoning_effort; 'low' cuts completion tokens, which matter on free-tier token limits.
 const reasoningEffort = $env.LLM_REASONING_EFFORT;
@@ -37,7 +31,6 @@ return [
   {
     json: {
       input,
-      allowedPrices: [...allowed],
       llmBody: {
         model: $env.LLM_MODEL || 'openai/gpt-oss-120b',
         temperature: 0.2,

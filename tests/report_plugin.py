@@ -39,7 +39,7 @@ NOT_COVERED = [
     "LLM behavior with a real model: the suite uses a fake LLM, so answer quality, prompt-injection resistance and off-catalog questions are only checked by `eval/live_eval.py` with a real Groq key (`reports/live-eval.md`).",
     "Apps Script deployment: the suite uses a fake leads endpoint. `apps-script/Code.gs`, the Google redirect flow and the sheet writes were not exercised against Google.",
     "ManyChat: no ManyChat account was involved. The steps and field names in `docs/manychat-setup.md` are unverified against the real product, including its plan limits and request timeout.",
-    "Concurrency race on workflow static data: tests send requests one at a time per contact. Simultaneous executions for the same contact can lose rate-limit or dedup updates (the Apps Script upsert is the second line of defense for leads).",
+    "Concurrency: this suite sends requests one at a time. Bursts are covered by `tests/security/test_e2e_rate_limit_race.py`; the limits hold because n8n runs one production execution at a time (`N8N_CONCURRENCY_PRODUCTION_LIMIT=1`).",
     "Real Telegram delivery, Instagram delivery and the Instagram 24 h messaging window.",
 ]
 
